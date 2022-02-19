@@ -49,22 +49,18 @@ def generate_target_points(**target):
 
     points = np.meshgrid(x, y, z)
 
-    return points
+    target_x = points[0].flatten()
+    target_y = points[1].flatten()
+    target_z = points[2].flatten()
+
+    return target_x, target_y, target_z
 
 if __name__ == '__main__':
     
     homography = Homography(**param)
-    target_xyz = generate_target_points(**target)
+    target_x, target_y, target_z = generate_target_points(**target)
+    target_u, target_v = homography.xyz_to_uv(target_x, target_y, target_z)
     
-    shape_x = target_xyz[0].shape
-    target_x = target_xyz[0].flatten()
-    target_y = target_xyz[1].flatten()
-    target_z = target_xyz[2].flatten()
-
-    target_uv = homography.xyz_to_uv(target_x, target_y, target_z)
-    target_u = target_uv[0]
-    target_v = target_uv[1]
-
     plt.figure('image')
     plt.plot([0, param['image_width']], [0, 0])
     plt.plot([0, param['image_width']], [param['image_height'], param['image_height']])

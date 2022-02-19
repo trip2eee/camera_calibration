@@ -120,4 +120,4 @@ class Homography:
         u = self.fu * np.multiply(ratios, u0) + self.cu
         v = self.fv * np.multiply(ratios, v0) + self.cv
 
-        return [u, v]
+        return u, v
