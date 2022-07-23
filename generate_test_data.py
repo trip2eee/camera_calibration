@@ -12,28 +12,27 @@ import matplotlib.pyplot as plt
 param = {
     'image_width':1280,
     'image_height':800,
-    # 'fu':1000,
-    # 'fv':1000,
+    'fu':1000,
+    'fv':1000,
 
-    'fu':800,
-    'fv':800,
     'cu':640,
     'cv':400,
     # 'dist':[-0.3, -0.03, -0.003, 0.0, 0.0, 0.0],
     'dist':[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 
-    'roll': -0.03,
-    'pitch': 0.02,
-    'yaw': 0.01,
-    'tx': 1.0,
-    'ty': 0.1,
-    'tz': -1.0
+    'roll': 0.0,
+    'pitch': 0.0,
+    'yaw': 0.0,
+    'tx': 0.0,
+    'ty': 0.0,
+    'tz': 0.0
 }
 
 target = {
-    'x':1.5,
-    'z':0.2,
-    'y':-1,
+    'x':-1.0,
+    'y':-1.0,
+    'z':3,
+    
     'check_size':0.2,
     'rows':10,
     'cols':10
@@ -47,9 +46,9 @@ def generate_target_points(**target):
     y0 = target['y']
     z0 = target['z']
 
-    x = np.linspace(x0, x0, 1)
-    y = np.linspace(y0, y0+(cols-1)*check_size, cols)
-    z = np.linspace(z0, z0+(rows-1)*check_size, rows)
+    x = np.linspace(x0, x0+(cols-1)*check_size, cols)
+    y = np.linspace(y0, y0+(rows-1)*check_size, rows)
+    z = np.linspace(z0, z0,1)
 
     points = np.meshgrid(x, y, z)
 

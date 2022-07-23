@@ -67,21 +67,16 @@ class CameraGeometry:
         K = np.matrix([[fu, 0,  cu],
                        [0,  fv, cv],
                        [0,  0,  1,]])
-
-        # permutation matrix
-        P = np.matrix([[0, -1,  0],
-                       [0,  0, -1],
-                       [1,  0,  0]])
         
         R  = np.matmul(Rz, np.matmul(Ry, Rx))
         RT = np.matmul(R, T)
-        H  = np.matmul(K, np.matmul(P, RT))
+        H  = np.matmul(K, RT)
 
         self.H = H
         self.H3x3 = np.matrix([[H[0,0], H[0,1], H[0,3]],
                                [H[1,0], H[1,1], H[1,3]],
                                [H[2,0], H[2,1], H[2,3]]])
-        self.invH3x3 = np.linalg.inv(self.H3x3)
+        # self.invH3x3 = np.linalg.inv(self.H3x3)
 
         
     def xyz_to_uv(self, x:np.ndarray, y:np.ndarray, z:np.ndarray):

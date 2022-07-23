@@ -59,7 +59,7 @@ where
 
 $$H = \begin{bmatrix}h_{11} & h_{12} & h_{13} \\\\ h_{21} & h_{22} & h_{23} \\\\ h_{31} & h_{32} & h_{33}\end{bmatrix}$$
 
-Since multiplying a constant to the numerator and denominator yields the same result,
+Since multiplying the numerator and the denominator by a constant yields the same result,
 
 $$u = \frac{h_{11}x + h_{12}y + h_{13}}{h_{31}x + h_{32}y + h_{33}} = \frac{\alpha \left(h_{11}x + h_{12}y + h_{13}\right)}{\alpha \left(h_{31}x + h_{32}y + h_{33}\right)}$$
 
@@ -75,7 +75,7 @@ $$Ax=b$$
 
 where 
 
-$$A=\begin{bmatrix}- x & - y & -1 & 0 & 0 & 0 & u x\\\\0 & 0 & 0 & - x & - y & -1 & v x\end{bmatrix}$$
+$$A=\begin{bmatrix}- x & - y & -1 & 0 & 0 & 0 & u x & u y\\\\0 & 0 & 0 & - x & - y & -1 & v x & v y\end{bmatrix}$$
 
 $$b=\begin{bmatrix}- u\\\\- v\end{bmatrix}$$
 
@@ -115,6 +115,23 @@ $$Vb = 0$$
 where
 $$V=\begin{bmatrix}h_{11} h_{12} & h_{11} h_{32} + h_{12} h_{31} & h_{21} h_{22} & h_{21} h_{32} + h_{22} h_{31} & h_{31} h_{32}\\\\h_{11}^{2} - h_{12}^{2} & 2 h_{11} h_{31} - 2 h_{12} h_{32} & h_{21}^{2} - h_{22}^{2} & 2 h_{21} h_{31} - 2 h_{22} h_{32} & h_{31}^{2} - h_{32}^{2}\end{bmatrix}$$
 $$b = \begin{bmatrix}b_{11} & b_{13} & b_{22} & b_{23} & b_{33}\end{bmatrix}^T$$
+
+
+Since $B$ matrix has an arbitrary scale factor $B=\frac{1}{\lambda^2} K^{-T}K^{-1}$, the parameters are computed as follows.
+
+$$ B = K^{-T} K^{-1} = \begin{bmatrix}\frac{1}{\lambda^2}\frac{1}{f_{u}^{2}} & 0 & - \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}}\\\\0 & \frac{1}{\lambda^2}\frac{1}{f_{v}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}}\\\\- \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}} & \frac{1}{\lambda^2}\left(\frac{cu^{2}}{f_{u}^{2}} + \frac{cv^{2}}{f_{v}^{2}} + 1\right)\end{bmatrix} = \begin{bmatrix}b_{11} & 0 & b_{13} \\\\ 0 & b_{22} & b_{23} \\\\ b_{13} & b_{23} & b_{33} \end{bmatrix}$$
+
+$cu = -b_{13}/b_{11}$
+
+$cv = -b_{23}/b_{22}$
+
+$s=\frac{1}{\lambda^2}=b_{33} + b_{13}cu + b_{23}cv$
+
+$f_u = \sqrt{b_{11} / s}$
+
+$f_v = \sqrt{b_{22} / s}$
+
+
 
 For detailed process of symbolic computation, please refer to [initial_value.ipynb](initial_value.ipynb)
 
