@@ -50,10 +50,38 @@ $u_d = f_u \cdot ratio \cdot u_n + cu$
 
 $v_d = f_v \cdot ratio \cdot v_n + cv$
 
+## Homography
+Compute homography with $z=0$
+
+$$p = \begin{bmatrix}w\cdot u\\\\w\cdot v\\\\w\end{bmatrix} = H\begin{bmatrix}x \\\\ y \\\\ 1\end{bmatrix}$$
+
+where
+
+$$H = \begin{bmatrix}h_{11} & h_{12} & h_{13} \\\\ h_{21} & h_{22} & h_{23} \\\\ h_{31} & h_{32} & h_{33}\end{bmatrix}$$
+
+Since multiplying a constant to the numerator and denominator yields the same result,
+
+$$u = \frac{h_{11}x + h_{12}y + h_{13}}{h_{31}x + h_{32}y + h_{33}} = \frac{\alpha \left(h_{11}x + h_{12}y + h_{13}\right)}{\alpha \left(h_{31}x + h_{32}y + h_{33}\right)}$$
+
+$$v = \frac{h_{21}x + h_{22}y + h_{23}}{h_{31}x + h_{32}y + h_{33}}= \frac{\alpha \left(h_{21}x + h_{22}y + h_{23}\right)}{\alpha \left(h_{31}x + h_{32}y + h_{33}\right)}$$
+
+the computation can be simplified by setting $\alpha = 1/h_{33}$
+
+$$H = \begin{bmatrix}h_{11} & h_{12} & h_{13} \\\\ h_{21} & h_{22} & h_{23} \\\\ h_{31} & h_{32} & 1\end{bmatrix}$$
+
+The homography can be solved as
+
+$$Ax=b$$
+
+where 
+
+$$A=\begin{bmatrix}- x & - y & -1 & 0 & 0 & 0 & u x\\\\0 & 0 & 0 & - x & - y & -1 & v x\end{bmatrix}$$
+
+$$b=\begin{bmatrix}- u\\\\- v\end{bmatrix}$$
+
+For detailed process of symbolic computation, please refer to [homography.ipynb](homography.ipynb)
 
 ## Initial value
-
-Compute homography with $z=0$
 
 $$\begin{bmatrix}w\cdot u\\\\w\cdot v\\\\w\end{bmatrix} = H\begin{bmatrix}x \\\\ y \\\\ 1\end{bmatrix}$$
 
