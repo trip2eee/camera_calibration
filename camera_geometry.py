@@ -1,13 +1,13 @@
 """
-@fn     homography.py
-@brief  Homography class.
+@fn     camera_geometry.py
+@brief  CameraGeometry class.
 @author Jongmin Park
 @date   February 02, 2022
 """
 
 import numpy as np
 
-class Homography:
+class CameraGeometry:
     """ Homography class
     """
     def __init__(self, **params):

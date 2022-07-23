@@ -5,18 +5,22 @@
 @date   February 02, 2022
 """
 
-from homography import Homography
+from camera_geometry import CameraGeometry
 import numpy as np
 import matplotlib.pyplot as plt
 
 param = {
     'image_width':1280,
     'image_height':800,
-    'fu':1200,
-    'fv':1200,
+    # 'fu':1000,
+    # 'fv':1000,
+
+    'fu':800,
+    'fv':800,
     'cu':640,
     'cv':400,
-    'dist':[-1, -0.5, -0.9, 0.0, 0.5, 1.0],
+    # 'dist':[-0.3, -0.03, -0.003, 0.0, 0.0, 0.0],
+    'dist':[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 
     'roll': -0.03,
     'pitch': 0.02,
@@ -57,7 +61,7 @@ def generate_target_points(**target):
 
 if __name__ == '__main__':
     
-    homography = Homography(**param)
+    homography = CameraGeometry(**param)
     target_x, target_y, target_z = generate_target_points(**target)
     target_u, target_v = homography.xyz_to_uv(target_x, target_y, target_z)
     
