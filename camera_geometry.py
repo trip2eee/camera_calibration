@@ -13,14 +13,15 @@ class CameraGeometry:
     def __init__(self, **params):
         """This constructor reads parameters and calls computeH() for computing homography matrix from the given parameters.
         """
+        intrinsic = params['intrinsic']
 
-        self.image_width = params['image_width']
-        self.image_height = params['image_height']
-        self.fu = params['fu']
-        self.fv = params['fv']        
-        self.cu = params['cu']
-        self.cv = params['cv']
-        self.dist = params['dist']  # distortion parameters
+        self.image_width = intrinsic['image_width']
+        self.image_height = intrinsic['image_height']
+        self.fu = intrinsic['fu']
+        self.fv = intrinsic['fv']        
+        self.cu = intrinsic['cu']
+        self.cv = intrinsic['cv']
+        self.dist = intrinsic['dist']  # distortion parameters
 
         self.roll = params['roll']
         self.pitch = params['pitch']
@@ -36,47 +37,47 @@ class CameraGeometry:
         """
         cosr = np.cos(self.roll)
         sinr = np.sin(self.roll)
-        Rx = np.matrix([[1, 0,     0,  ],
-                        [0, cosr, -sinr],
-                        [0, sinr,  cosr]])
+        Rx = np.array([[1, 0,     0,  ],
+                       [0, cosr, -sinr],
+                       [0, sinr,  cosr]])
 
         # pitch
         cosp = np.cos(self.pitch)
         sinp = np.sin(self.pitch)
-        Ry = np.matrix([[cosp,  0, sinp],
-                        [0,     1,    0],
-                        [-sinp, 0, cosp]])
+        Ry = np.array([[cosp,  0, sinp],
+                       [0,     1,    0],
+                       [-sinp, 0, cosp]])
 
         # yaw
         cosy = np.cos(self.yaw)
         siny = np.sin(self.yaw)
-        Rz = np.matrix([[cosy, -siny, 0],
-                        [siny,  cosy, 0],
-                        [0,        0, 1]])
+        Rz = np.array([[cosy, -siny, 0],
+                       [siny,  cosy, 0],
+                       [0,        0, 1]])
 
         # translation
-        T = np.matrix([[1, 0, 0, self.tx],
-                       [0, 1, 0, self.ty],
-                       [0, 0, 1, self.tz]])
+        T = np.array([[1, 0, 0, self.tx],
+                      [0, 1, 0, self.ty],
+                      [0, 0, 1, self.tz]])
 
         # intrinsic camera parameter matrix
         fu = self.fu
         fv = self.fv
         cu = self.cu
         cv = self.cv
-        K = np.matrix([[fu, 0,  cu],
-                       [0,  fv, cv],
-                       [0,  0,  1,]])
+        K = np.array([[fu, 0,  cu],
+                      [0,  fv, cv],
+                      [0,  0,  1,]])
         
         R  = np.matmul(Rz, np.matmul(Ry, Rx))
         RT = np.matmul(R, T)
         H  = np.matmul(K, RT)
 
         self.H = H
-        self.H3x3 = np.matrix([[H[0,0], H[0,1], H[0,3]],
-                               [H[1,0], H[1,1], H[1,3]],
-                               [H[2,0], H[2,1], H[2,3]]])
-        # self.invH3x3 = np.linalg.inv(self.H3x3)
+        self.H3x3 = np.array([[H[0,0], H[0,1], H[0,3]],
+                              [H[1,0], H[1,1], H[1,3]],
+                              [H[2,0], H[2,1], H[2,3]]])
+        self.invH3x3 = np.linalg.inv(self.H3x3)
 
         
     def xyz_to_uv(self, x:np.ndarray, y:np.ndarray, z:np.ndarray):

@@ -79,9 +79,11 @@ $$A=\begin{bmatrix}- x & - y & -1 & 0 & 0 & 0 & u x & u y\\\\0 & 0 & 0 & - x & -
 
 $$b=\begin{bmatrix}- u\\\\- v\end{bmatrix}$$
 
-For detailed process of symbolic computation, please refer to [homography.ipynb](homography.ipynb)
+For detailed process of symbolic computation, please refer to [doc/homography.ipynb](doc/homography.ipynb)
 
-## Initial value
+The computation of homography matrices is implemented in compute_homography() in [calibrate_camera.py](calibrate_camera.py)
+
+## Initial values
 
 $$\begin{bmatrix}w\cdot u\\\\w\cdot v\\\\w\end{bmatrix} = H\begin{bmatrix}x \\\\ y \\\\ 1\end{bmatrix}$$
 
@@ -131,9 +133,42 @@ $f_u = \sqrt{b_{11} / s}$
 
 $f_v = \sqrt{b_{22} / s}$
 
+Now we can decompose extrinsic camera parameters
+
+$$H = \lambda K\cdot RT$$
+$$K^{-1}H = \begin{bmatrix} K^{-1} h_1 & K^{-1} h_2 & K^{-1} h_3 \end{bmatrix} = \lambda RT = \begin{bmatrix} \lambda r_1 & \lambda r_2 & \lambda rt \end{bmatrix}$$
+
+The scale factor $\lambda$ can be computed exploiting orthonormality of rotation matrix.
+$$\lambda = \sqrt{\lVert K^{-1} h_1 \rVert} = \sqrt{\lVert K^{-1} h_2 \rVert} $$
+
+Since rotation matrix $R$ is orthogonal, the 3rd column of $R$ can be comptued as 
+
+$$r_3=r_1 \times r_2$$
+
+The 3rd column of $K^{-1}H$ is $\lambda Rt$ Translation vector $t$ can be decompused as follows since the transpose of orthogonal matrix is equivalent to its inverse.
+
+$$t = R^Trt = \begin{bmatrix}t_x & t_y & t_z\end{bmatrix}^T$$
+
+### Rotation angle estimation
+
+$$ R_q = R_zR_yR_x = \begin{bmatrix}\cos{\psi} \cos{\theta} & \sin{\phi} \sin{\theta} \cos{\psi} - \sin{\psi} \cos{\phi} & \sin{\phi} \sin{\psi} + \sin{\theta} \cos{\phi} \cos{\psi}\\\\ \sin{\psi} \cos{\theta} & \sin{\phi} \sin{\psi} \sin{\theta} + \cos{\phi} \cos{\psi} & - \sin{\phi} \cos{\psi} + \sin{\psi} \sin{\theta} \cos{\phi}\\\\- \sin{\theta} & \sin{\phi} \cos{\theta} & \cos{\phi} \cos{\theta}\end{bmatrix} $$
+
+$$\phi = atan\left(\frac{r_{3,2}}{r_{3,3}}\right)$$
+
+$$ \theta = -asin(r_{3,1}) $$
+
+$$ \psi = atan\left(\frac{r_{2,1}}{r_{1,1}}\right) $$
 
 
-For detailed process of symbolic computation, please refer to [initial_value.ipynb](initial_value.ipynb)
+Please note that $R$ may not satisfies the properties of a rotation matrix (e.g. orthogonality) due to noise. However it can be good initial values for non-linear optimization.
+
+
+For detailed process of symbolic computation, please refer to [doc/initial_value.ipynb](doc/initial_value.ipynb)
+
+The computation of the initial values is implemented in compute_initial_values() in [calibrate_camera.py](calibrate_camera.py)
+
+
+The computation of initial values is validated by unit test using simulated data. The test code is implemented in [test_calibration_init.py](test_calibration_init.py).
 
 # Reference
 Z. Zhang. A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence, 22(11):1330-1334, 2000

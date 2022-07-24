@@ -56,7 +56,9 @@ def generate_target_points(**target):
     target_y = points[1].flatten()
     target_z = points[2].flatten()
 
-    return target_x, target_y, target_z
+    pt_world = np.vstack((target_x, target_y, target_z)).T
+
+    return pt_world
 
 if __name__ == '__main__':
     
