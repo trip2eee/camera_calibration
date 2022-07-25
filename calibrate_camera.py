@@ -1,19 +1,18 @@
 """
 @fn     calibrate_camera.py
 @brief  This file calibrates camera
+        repository: https://github.com/trip2eee/camera_calibration
 @author Jongmin Park
 @date   July 23, 2022
 """
 
-from re import S
 import numpy as np
-
+from quaternion import Quaternion
+import time
+from typing import List
 
 class CalibrateCamera:
-    def __init__(self):
-        self.target_origin = None
-        self.num_images = 0
-        
+    def __init__(self):        
         # intrinsic camera parameters        
         self.intrinsic = {
             'image_width':0,
@@ -25,19 +24,43 @@ class CalibrateCamera:
             'dist':[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }
 
-        self.homography = []
-        self.extrinsics = []
+        self.homography = []    # list of homography matrices for input images.
+        self.extrinsics = []    # list of extrinsic camera parameters for input images.
+        self.num_iterations = 20
 
-    def calibrate(self, pt_world, list_pt_image):
-        self.num_images = len(list_pt_image)
-        
+    def calibrate(self, pt_world:np.ndarray, pt_images:List[np.ndarray], num_iterations=20):
+        """This method is the main entry fuction.
+        """
+        t_start = time.time()
 
-        self.target_origin = pt_world[0,:]
+        self.num_images= len(pt_images)
+        self.num_iterations = num_iterations
         
-        for idx_image in range(len(list_pt_image)):
-            self.compute_homography(pt_world, list_pt_image[idx_image])
+        for idx_image in range(len(pt_images)):
+            H = self.compute_homography(pt_world, pt_images[idx_image])
+            self.homography.append(H)
         
         self.compute_initial_values()
+        self.refine_parameters(pt_world, pt_images)
+
+        t_end = time.time()
+        print('Finished in {} seconds'.format(t_end - t_start))
+
+    
+    def print_parameters(self):
+        """This method prints camera parameters
+        """
+
+        print('intrinsic parameters')
+        print('fu, fv: {:.6f}, {:.6f}'.format(self.intrinsic['fu'], self.intrinsic['fv']))
+        print('cu, cv: {:.6f}, {:.6f}'.format(self.intrinsic['cu'], self.intrinsic['cv']))
+        print('distortion: ',end='')
+        print(self.intrinsic['dist'])
+        
+        print('extrinsinc parameters (x, y, z)')
+        for idx_image, extrinsic in enumerate(self.extrinsics):
+            print('Angles {}: {:.6f}, {:.6f}, {:.6f}'.format(idx_image, extrinsic['roll'], extrinsic['pitch'], extrinsic['yaw']))
+            print('Translation {}: {:.6f}, {:.6f}, {:.6f}'.format(idx_image, extrinsic['tx'], extrinsic['ty'], extrinsic['tz']))
 
     def compute_initial_values(self):
         """This method computes initial parameters
@@ -163,8 +186,290 @@ class CalibrateCamera:
                       [h[3,0], h[4,0], h[5,0]],
                       [h[6,0], h[7,0], 1.0]])
         
-        self.homography.append(H)
+        return H
 
+    def refine_parameters(self, pt_world, list_pt_image):
+        """This method refines calibration parameters including distortion using Levenberg-Marquardt method.
+        """
+        num_intrinsics = 7
+        num_extrinsics = 7
+        num_images = len(list_pt_image)
+        num_points = len(pt_world)
+
+        num_rows_j = 3
+        num_cols_j = num_intrinsics + (num_extrinsics * num_images)
+
+        param = np.zeros([num_cols_j, 1])
+
+        # initial values
+        param[0,0] = self.intrinsic['fu']
+        param[1,0] = self.intrinsic['fv']
+        param[2,0] = self.intrinsic['cu']
+        param[3,0] = self.intrinsic['cv']
+        param[4,0] = self.intrinsic['dist'][0]
+        param[5,0] = self.intrinsic['dist'][1]
+        param[6,0] = self.intrinsic['dist'][2]
+
+        for idx_image in range(num_images):
+            roll  = self.extrinsics[idx_image]['roll']
+            pitch = self.extrinsics[idx_image]['pitch']
+            yaw   = self.extrinsics[idx_image]['yaw']
+            tx    = self.extrinsics[idx_image]['tx']
+            ty    = self.extrinsics[idx_image]['ty']
+            tz    = self.extrinsics[idx_image]['tz']
+            
+            q_rot = Quaternion()
+            q_rot.to_quaternion(roll, pitch, yaw)
+            R = q_rot.to_rotation_matrix()
+            t = np.array([[tx], [ty], [tz]])
+            rt = np.matmul(R, t)
+
+            param[num_intrinsics + (idx_image*num_extrinsics) + 0, 0] = q_rot.q[0]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 1, 0] = q_rot.q[1]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 2, 0] = q_rot.q[2]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 3, 0] = q_rot.q[3]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 4, 0] = rt[0,0]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 5, 0] = rt[1,0]
+            param[num_intrinsics + (idx_image*num_extrinsics) + 6, 0] = rt[2,0]
+
+        opt_ms_error = 0.0
+        updateJ = True
+        mu = 0.0001
+
+        # compute initial error
+        for idx_image in range(num_images):
+            for idx_point in range(len(pt_world)):
+                xyz = pt_world[idx_point]
+                uv = list_pt_image[idx_image][idx_point]
+
+                intrin = param[0:num_intrinsics, 0]
+                extrin = param[num_intrinsics + (idx_image*num_extrinsics): num_intrinsics + ((idx_image+1)*num_extrinsics), 0]
+                f = self.compute_f(intrin, extrin, uv, xyz)
+
+                eu = f[0,0]
+                ev = f[1,0]
+                eq = f[2,0]
+                opt_ms_error += eu**2 + ev**2 + eq**2
+        opt_ms_error = opt_ms_error / (num_images * num_points)
+        print('initial mean squared error: {}'.format(opt_ms_error))
+
+        for iter in range(self.num_iterations):
+            if updateJ:
+                # JJ = J^T * J
+                JJ = np.zeros([num_cols_j, num_cols_j])
+                # Jf = J^T * f
+                Jf = np.zeros([num_cols_j, 1])
+
+                for idx_image in range(num_images):
+                    for idx_point in range(len(pt_world)):
+                        xyz = pt_world[idx_point]
+                        uv = list_pt_image[idx_image][idx_point]
+
+                        intrin = param[0:num_intrinsics, 0]
+                        extrin = param[num_intrinsics + (idx_image*num_extrinsics): num_intrinsics + ((idx_image+1)*num_extrinsics), 0]
+                        f = self.compute_f(intrin, extrin, uv, xyz)
+                        J_intrin, J_extrin = self.compute_J(intrin, extrin, xyz)
+
+                        J = np.zeros([num_rows_j, num_cols_j])
+                        J[:,0:num_intrinsics] = J_intrin
+                        J[:,num_intrinsics+idx_image*num_extrinsics:num_intrinsics+(idx_image+1)*num_extrinsics] = J_extrin
+
+                        Jf += np.matmul(J.T, f)
+                        JJ += np.matmul(J.T, J)
+                updateJ = False
+
+            # compute delta p
+            for idx_d in range(num_cols_j):
+                JJ[idx_d, idx_d] = (1.0 + mu) * JJ[idx_d, idx_d]
+            
+            delta_param = -np.linalg.solve(JJ, Jf)
+
+            param_temp = param + delta_param
+
+            # compute error of the temp. solution
+            temp_ms_error = 0.0
+            for idx_image in range(num_images):
+                for idx_point in range(len(pt_world)):
+                    xyz = pt_world[idx_point]
+                    uv = list_pt_image[idx_image][idx_point]
+
+                    intrin = param_temp[0:num_intrinsics, 0]
+                    extrin = param_temp[num_intrinsics + (idx_image*num_extrinsics): num_intrinsics + ((idx_image+1)*num_extrinsics), 0]
+                    f = self.compute_f(intrin, extrin, uv, xyz)
+
+                    eu = f[0,0]
+                    ev = f[1,0]
+                    eq = f[2,0]
+                    temp_ms_error += eu**2 + ev**2 + eq**2
+            temp_ms_error = temp_ms_error / (num_images * num_points)
+            
+            if temp_ms_error < opt_ms_error:
+                mu *= 0.1
+                updateJ = True
+                param = param_temp.copy()
+                opt_ms_error = temp_ms_error
+            else:
+                mu *= 10
+
+            print('iteration: {}, mean squared projection error: {}'.format(iter, opt_ms_error))
+        
+        # update parameters
+        self.intrinsic['fu']      = param[0,0]
+        self.intrinsic['fv']      = param[1,0]
+        self.intrinsic['cu']      = param[2,0]
+        self.intrinsic['cv']      = param[3,0]
+        self.intrinsic['dist'][0] = param[4,0]
+        self.intrinsic['dist'][1] = param[5,0]
+        self.intrinsic['dist'][2] = param[6,0]
+
+        for idx_image in range(num_images):
+            extrin = param[num_intrinsics + idx_image*num_extrinsics:num_intrinsics + (idx_image+1)*num_extrinsics]
+            qr = extrin[0,0]
+            qx = extrin[1,0]
+            qy = extrin[2,0]            
+            qz = extrin[3,0]
+            q_rot = Quaternion(np.array([qr, qx, qy, qz]))
+
+            roll, pitch, yaw = q_rot.to_euler_angles()
+            R = q_rot.to_rotation_matrix()
+            rt = extrin[4:]
+            t = np.matmul(R.T, rt)
+
+            self.extrinsics[idx_image]['roll']  = roll
+            self.extrinsics[idx_image]['pitch'] = pitch
+            self.extrinsics[idx_image]['yaw']   = yaw
+            self.extrinsics[idx_image]['tx']    = t[0,0]
+            self.extrinsics[idx_image]['ty']    = t[1,0]
+            self.extrinsics[idx_image]['tz']    = t[2,0]
+
+    def compute_f(self, intrinsic, extrinsic, uv, xyz):
+        """This method computes error vector.
+        """
+        u, v = uv
+        x, y, z = xyz
+
+        f_u = intrinsic[0]
+        f_v = intrinsic[1]
+        cu  = intrinsic[2]
+        cv  = intrinsic[3]     
+        k1  = intrinsic[4]
+        k2  = intrinsic[5]
+        k3  = intrinsic[6]
+        
+        qr  = extrinsic[0]
+        qx  = extrinsic[1]
+        qy  = extrinsic[2]
+        qz  = extrinsic[3]
+        t_x = extrinsic[4]
+        t_y = extrinsic[5]
+        t_z = extrinsic[6]
+
+        t1 = (-2.0*qy**2 - 2.0*qz**2 + 1.0)
+        t2 = (-2.0*qr*qz + 2.0*qx*qy)
+        t3 = (2.0*qr*qy + 2.0*qx*qz)
+        t4 = (-2.0*qr*qy + 2.0*qx*qz)
+        t5 = (2.0*qr*qx + 2.0*qy*qz)
+        t6 = (-2.0*qx**2 - 2.0*qy**2 + 1.0)
+        t7 = (2.0*qr*qz + 2.0*qx*qy)
+        t8 = (-2.0*qx**2 - 2.0*qz**2 + 1.0)
+        t9 = (-2.0*qr*qx + 2.0*qy*qz)
+
+        t101 = (t_x + x*t1 + y*t2 + z*t3)
+        t102 = (t_z + x*t4 + y*t5 + z*t6)
+        t103 = (t_y + x*t7 + y*t8 + z*t9)
+
+        t1001 = (t101**2/t102**2 + t103**2/t102**2)
+
+        e_u = cu + f_u*t101*(k1*t1001 + k2*t1001**2 + k3*t1001**3 + 1)/t102 - u
+        e_v = cv + f_v*t103*(k1*t1001 + k2*t1001**2 + k3*t1001**3 + 1)/t102 - v
+        e_q = qr**2 + qx**2 + qy**2 + qz**2 - 1
+
+        f = np.array([[e_u], [e_v], [e_q]])
+
+        return f
+
+    def compute_J(self, intrinsic:np.ndarray, extrinsic:np.ndarray, xyz:np.ndarray):
+        """This method computes Jacobian matrix
+        """
+        x, y, z = xyz
+
+        f_u = intrinsic[0]
+        f_v = intrinsic[1]
+
+        k1  = intrinsic[4]
+        k2  = intrinsic[5]
+        k3  = intrinsic[6]
+        
+        qr  = extrinsic[0]
+        qx  = extrinsic[1]
+        qy  = extrinsic[2]
+        qz  = extrinsic[3]
+        t_x = extrinsic[4]
+        t_y = extrinsic[5]
+        t_z = extrinsic[6]
+        
+        t1 = (-2.0*qy**2 - 2.0*qz**2 + 1.0)
+        t2 = (-2.0*qr*qz + 2.0*qx*qy)
+        t3 = (2.0*qr*qy + 2.0*qx*qz)
+        t4 = (-2.0*qr*qy + 2.0*qx*qz)
+        t5 = (2.0*qr*qx + 2.0*qy*qz)
+        t6 = (-2.0*qx**2 - 2.0*qy**2 + 1.0)
+        t7 = (2.0*qr*qz + 2.0*qx*qy)
+        t8 = (-2.0*qx**2 - 2.0*qz**2 + 1.0)
+        t9 = (-2.0*qr*qx + 2.0*qy*qz)
+
+        t101 = (t_x + x*t1 + y*t2 + z*t3)
+        t102 = (t_z + x*t4 + y*t5 + z*t6)
+        t103 = (t_y + x*t7 + y*t8 + z*t9)
+
+        t1001 = (t101**2/t102**2 + t103**2/t102**2)
+        
+        t10001 = (k1*t1001 + k2*t1001**2 + k3*t1001**3 + 1)
+
+        de_dfu = np.array([[t101*t10001/t102],
+                           [0],
+                           [0]])
+        de_dfv = np.array([[0],
+                           [t103*t10001/t102], 
+                           [0]])
+        de_dcu = np.array([[1], [0], [0]])
+        de_dcv = np.array([[0], [1], [0]])
+        de_dk1 = np.array([[f_u*t1001*t101/t102],
+                           [f_v*t1001*t103/t102],
+                           [0]])
+        de_dk2 = np.array([[f_u*t1001**2*t101/t102],
+                           [f_v*t1001**2*t103/t102],
+                           [0]])
+        de_dk3 = np.array([[f_u*t1001**3*t101/t102], 
+                           [f_v*t1001**3*t103/t102],
+                           [0]])
+
+        de_dqr = np.array([[f_u*(-2.0*qx*y + 2.0*qy*x)*t101*t10001/t102**2 + f_u*(2.0*qy*z - 2.0*qz*y)*t10001/t102 + f_u*(k1*((-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + (-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + (-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + (4.0*qy*z - 4.0*qz*y)*t101/t102**2) + k2*t1001*(2*(-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + 2*(-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + 2*(-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + 2*(4.0*qy*z - 4.0*qz*y)*t101/t102**2) + k3*t1001**2*(3*(-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + 3*(-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + 3*(-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + 3*(4.0*qy*z - 4.0*qz*y)*t101/t102**2))*t101/t102],
+                           [f_v*(-2.0*qx*y + 2.0*qy*x)*t103*t10001/t102**2 + f_v*(-2.0*qx*z + 2.0*qz*x)*t10001/t102 + f_v*(k1*((-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + (-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + (-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + (4.0*qy*z - 4.0*qz*y)*t101/t102**2) + k2*t1001*(2*(-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + 2*(-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + 2*(-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + 2*(4.0*qy*z - 4.0*qz*y)*t101/t102**2) + k3*t1001**2*(3*(-4.0*qx*y + 4.0*qy*x)*t101**2/t102**3 + 3*(-4.0*qx*y + 4.0*qy*x)*t103**2/t102**3 + 3*(-4.0*qx*z + 4.0*qz*x)*t103/t102**2 + 3*(4.0*qy*z - 4.0*qz*y)*t101/t102**2))*t103/t102],
+                           [2*qr]])
+        de_dqx = np.array([[f_u*(2.0*qy*y + 2.0*qz*z)*t10001/t102 + f_u*(k1*((4.0*qy*y + 4.0*qz*z)*t101/t102**2 + (-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + (-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + (-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2) + k2*t1001*(2*(4.0*qy*y + 4.0*qz*z)*t101/t102**2 + 2*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + 2*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + 2*(-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2) + k3*t1001**2*(3*(4.0*qy*y + 4.0*qz*z)*t101/t102**2 + 3*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + 3*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + 3*(-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2))*t101/t102 + f_u*(-2.0*qr*y + 4.0*qx*z - 2.0*qz*x)*t101*t10001/t102**2], 
+                           [f_v*(k1*((4.0*qy*y + 4.0*qz*z)*t101/t102**2 + (-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + (-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + (-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2) + k2*t1001*(2*(4.0*qy*y + 4.0*qz*z)*t101/t102**2 + 2*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + 2*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + 2*(-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2) + k3*t1001**2*(3*(4.0*qy*y + 4.0*qz*z)*t101/t102**2 + 3*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t101**2/t102**3 + 3*(-4.0*qr*y + 8.0*qx*z - 4.0*qz*x)*t103**2/t102**3 + 3*(-4.0*qr*z - 8.0*qx*y + 4.0*qy*x)*t103/t102**2))*t103/t102 + f_v*(-2.0*qr*y + 4.0*qx*z - 2.0*qz*x)*t103*t10001/t102**2 + f_v*(-2.0*qr*z - 4.0*qx*y + 2.0*qy*x)*t10001/t102],
+                           [2*qx]])
+        de_dqy = np.array([[f_u*(k1*((4.0*qx*x + 4.0*qz*z)*t103/t102**2 + (4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + (4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + (4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2) + k2*t1001*(2*(4.0*qx*x + 4.0*qz*z)*t103/t102**2 + 2*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + 2*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + 2*(4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2) + k3*t1001**2*(3*(4.0*qx*x + 4.0*qz*z)*t103/t102**2 + 3*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + 3*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + 3*(4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2))*t101/t102 + f_u*(2.0*qr*x + 4.0*qy*z - 2.0*qz*y)*t101*t10001/t102**2 + f_u*(2.0*qr*z + 2.0*qx*y - 4.0*qy*x)*t10001/t102],
+                           [f_v*(2.0*qx*x + 2.0*qz*z)*t10001/t102 + f_v*(k1*((4.0*qx*x + 4.0*qz*z)*t103/t102**2 + (4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + (4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + (4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2) + k2*t1001*(2*(4.0*qx*x + 4.0*qz*z)*t103/t102**2 + 2*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + 2*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + 2*(4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2) + k3*t1001**2*(3*(4.0*qx*x + 4.0*qz*z)*t103/t102**2 + 3*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t101**2/t102**3 + 3*(4.0*qr*x + 8.0*qy*z - 4.0*qz*y)*t103**2/t102**3 + 3*(4.0*qr*z + 4.0*qx*y - 8.0*qy*x)*t101/t102**2))*t103/t102 + f_v*(2.0*qr*x + 4.0*qy*z - 2.0*qz*y)*t103*t10001/t102**2],
+                           [2*qy]])
+        de_dqz = np.array([[f_u*(-2.0*qx*x - 2.0*qy*y)*t101*t10001/t102**2 + f_u*(k1*((-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + (-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + (4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + (-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2) + k2*t1001*(2*(-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + 2*(-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + 2*(4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + 2*(-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2) + k3*t1001**2*(3*(-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + 3*(-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + 3*(4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + 3*(-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2))*t101/t102 + f_u*(-2.0*qr*y + 2.0*qx*z - 4.0*qz*x)*t10001/t102],
+                           [f_v*(-2.0*qx*x - 2.0*qy*y)*t103*t10001/t102**2 + f_v*(k1*((-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + (-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + (4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + (-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2) + k2*t1001*(2*(-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + 2*(-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + 2*(4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + 2*(-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2) + k3*t1001**2*(3*(-4.0*qx*x - 4.0*qy*y)*t101**2/t102**3 + 3*(-4.0*qx*x - 4.0*qy*y)*t103**2/t102**3 + 3*(4.0*qr*x + 4.0*qy*z - 8.0*qz*y)*t103/t102**2 + 3*(-4.0*qr*y + 4.0*qx*z - 8.0*qz*x)*t101/t102**2))*t103/t102 + f_v*(2.0*qr*x + 2.0*qy*z - 4.0*qz*y)*t10001/t102],
+                           [2*qz]])
+        de_dtx = np.array([[f_u*(k1*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2 + 2*k2*t1001*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2 + 3*k3*t1001**2*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2)*t101/t102 + f_u*t10001/t102],
+                           [f_v*(k1*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2 + 2*k2*t1001*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2 + 3*k3*t1001**2*(2*t_x + 2*x*t1 + 2*y*t2 + 2*z*t3)/t102**2)*t103/t102],
+                           [0]])
+        de_dty = np.array([[f_u*(k1*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2 + 2*k2*t1001*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2 + 3*k3*t1001**2*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2)*t101/t102],
+                           [f_v*(k1*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2 + 2*k2*t1001*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2 + 3*k3*t1001**2*(2*t_y + 2*x*t7 + 2*y*t8 + 2*z*t9)/t102**2)*t103/t102 + f_v*t10001/t102],
+                           [0]])
+        de_dtz = np.array([[f_u*(k1*(-2*t101**2/t102**3 - 2*t103**2/t102**3) + k2*(-4*t101**2/t102**3 - 4*t103**2/t102**3)*t1001 + k3*(-6*t101**2/t102**3 - 6*t103**2/t102**3)*t1001**2)*t101/t102 - f_u*t101*t10001/t102**2],
+                           [f_v*(k1*(-2*t101**2/t102**3 - 2*t103**2/t102**3) + k2*(-4*t101**2/t102**3 - 4*t103**2/t102**3)*t1001 + k3*(-6*t101**2/t102**3 - 6*t103**2/t102**3)*t1001**2)*t103/t102 - f_v*t103*t10001/t102**2],
+                           [0]])
+
+        J_intrin = np.hstack((de_dfu, de_dfv, de_dcu, de_dcv, de_dk1, de_dk2, de_dk3))
+        J_extrin = np.hstack((de_dqr, de_dqx, de_dqy, de_dqz, de_dtx, de_dty, de_dtz))
+
+        return J_intrin, J_extrin
 
 
         

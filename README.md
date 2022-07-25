@@ -1,5 +1,24 @@
 # Camera Calibration
-Camera calibration tool.
+Camera calibration based on Zhang's method.
+
+calibrate() method of CalibrateCamera class receives world coordinates of corner points and their corresponding image points from at least 3 images taken at different angles and positions. Then the method computes intrinsic parameters, distortion and extrinsic parameters.
+
+```python
+calib = CalibrateCamera()
+calib.calibrate(pt_world, pt_images)        
+calib.print_parameters()
+
+# Process the results
+# calib.intrinsic : dictionary of intrinsic parameters
+# calib.extrinsics : list of dictionary of extrinsic parameters
+
+# Visualize
+vis = Visualizer()
+vis.visualize_cameras(calib.extrinsics)
+```
+
+<img src='images/cameras.png' width='50%' height='50%'>
+
 
 ## Axis
 ### Image coordinate
@@ -44,7 +63,7 @@ $v_n = \frac{(v - cv)}{f_v}$
 
 $r_n^2 = u_n^2 + v_n^2$
 
-$ratio = \kappa_1 r_n^2 + \kappa_2 r_n^4 + + \kappa_3 r_n^6$
+$ratio = 1 + \kappa_1 r_n^2 + \kappa_2 r_n^4 + + \kappa_3 r_n^6$
 
 $u_d = f_u \cdot ratio \cdot u_n + cu$
 
@@ -169,6 +188,64 @@ The computation of the initial values is implemented in compute_initial_values()
 
 
 The computation of initial values is validated by unit test using simulated data. The test code is implemented in [test_calibration_init.py](test_calibration_init.py).
+
+
+## Refinement
+The initial values have the following defects.
+
+* Orthogonality of rotation matrices is not guaranteed.
+* Lens distortion is ignored.
+
+To improve the defects, parameters are refined in such a way that the reprojection error is minimized.
+
+The reprojection error is computed as follows.
+
+### 1. Compute camera coordinates
+
+$$ RT = \begin{bmatrix}R & t'\end{bmatrix}$$
+$$ \begin{bmatrix}x_c \\\\ y_c \\\\ z_c\end{bmatrix} = RT\begin{bmatrix} x \\\\ y \\\\ z \\\\ 1\end{bmatrix}$$
+
+where $t'=Rt$ for simplyfing computation.
+
+### 2. Compute lens distortion (radial distortion only)
+
+$$r^2 = u_n^2 + v_n^2$$
+$$ratio = 1 + \kappa_1 r^2 + \kappa_2 r^4 + \kappa_3 r^6$$
+
+where 
+$$ u_n = \frac{u - cu}{f_u} = x_c/z_c $$
+$$ v_n = \frac{v - cv}{f_v} = x_c/z_c $$
+
+Then the reprojection error is as follows
+
+$$u_d = f_u \cdot ratio \cdot u_n + cu$$
+$$v_d = f_v \cdot ratio \cdot v_n + cv$$
+
+$$e_u = u_d - u_{target}$$
+$$e_v = v_d - v_{target}$$
+
+
+### 3. Optimization
+$$ f(x) = \begin{bmatrix}e_{u,i,j}\\\\e_{v,i,j}\end{bmatrix}$$
+$$e(p) = \sum_{i,j}{\lVert f(x) \rVert}^2 $$
+Summation of errors over image $i$ and point $j$.
+
+$$f(p) = f(p + \Delta p) \approx f(p) + \frac{\partial f}{\partial p}\Delta p$$
+
+$$e = \sum_{i,j}{\left\lVert f(p) + \frac{\partial f}{\partial p}\Delta p \right\rVert}^2 $$
+
+$$ \frac{\partial e}{\partial \Delta p} = 2\sum{J^T\left(f(p) + J\Delta p\right)} = 0$$
+where $J = \frac{\partial f}{\partial p}$
+
+
+Repeat the following computation until the parameter converges. This implementation uses Levenberg-Marquardt method for better convergence.
+$$ \Delta p = \left[J^T J\right]^{-1} J^T f(p)$$
+$$ p \leftarrow p + \Delta p$$
+
+This process is implemented in refine_parameters() in [calibrate_camera.py](calibrate_camera.py) and validated in [test_calibration_optimization.py](test_calibration_optimization.py). All the estimated parameters satisfy accuracy of 1e-6. Reprojection error and its derivatives are derived by sympy. Then the resulting code are optimized by grouping common terms. For detailed computation process, please refer to [doc/optimization.ipynb](doc/optimization.ipynb)
+
+In the refinement of rotation matrix, quaternion is used instead of Euler angle to make derivatives simple. For explanation of quaternion, please refer to [https://github.com/trip2eee/quatlib](https://github.com/trip2eee/quatlib).
+
 
 # Reference
 Z. Zhang. A flexible new technique for camera calibration. IEEE Transactions on Pattern Analysis and Machine Intelligence, 22(11):1330-1334, 2000

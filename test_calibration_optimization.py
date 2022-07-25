@@ -1,13 +1,14 @@
 """
-@fn     test_calibration_init.py
-@brief  This file tests computation of initial values with simulated data.
-        - No distortion is considered.
+@fn     test_calibration_optimization.py
+@brief  This file tests computation with simulated data.
+        - Distortion is considered.
 @author Jongmin Park
 @date   July 23, 2022
 """
 from camera_geometry import CameraGeometry
 from generate_test_data import generate_target_points
 from calibrate_camera import CalibrateCamera
+from visualizer import Visualizer
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,7 +21,7 @@ intrinsic = {
     'fv':1000,
     'cu':640,
     'cv':400,
-    'dist':[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    'dist':[-0.3, 0.08, -0.009, 0.0, 0.0, 0.0],
 }
 
 param1 = {
@@ -79,7 +80,7 @@ params = [
     param4
 ]
 
-class TestCalibration_Init(unittest.TestCase):
+class TestCalibration_Optimization(unittest.TestCase):
 
     def test_calibrate(self):
         pt_world = generate_target_points(**target)        
@@ -100,16 +101,19 @@ class TestCalibration_Init(unittest.TestCase):
         target_u, target_v = homography.xyz_to_uv(pt_world[:,0], pt_world[:,1], pt_world[:,2])
         pt_image4 = np.vstack((target_u, target_v)).T
 
-        list_pt_image = [pt_image1, pt_image2, pt_image3, pt_image4]
+        pt_images = [pt_image1, pt_image2, pt_image3, pt_image4]
 
         calib = CalibrateCamera()
-        calib.calibrate(pt_world, list_pt_image)
+        calib.calibrate(pt_world, pt_images)
         calib.print_parameters()
+        
+        vis = Visualizer()
+        vis.visualize_cameras(calib.extrinsics)
+        # vis.visualize_reprojection(calib.intrinsic, calib.extrinsics, pt_world, list_pt_image)
 
-        for idx_image, pt_image in enumerate(list_pt_image):
-            # test for homography
+        for idx_image, pt_image in enumerate(pt_images):
+            # test for homography with larger threshold.
             H = calib.homography[idx_image]
-
             for i in range(len(pt_world)):
                 x = pt_world[i,0]
                 y = pt_world[i,1]
@@ -121,8 +125,8 @@ class TestCalibration_Init(unittest.TestCase):
                 err_u = pt_image[i,0] - u
                 err_v = pt_image[i,1] - v
                 sqr_err = err_u**2 + err_v**2
-                self.assertLess(sqr_err, 1e-20, 'Inaccurate Homography')
-            
+                self.assertLess(sqr_err, 2e2, 'Inaccurate Homography')
+
             # reprojection test
             param_test = calib.extrinsics[idx_image]
             param_test['intrinsic'] = calib.intrinsic
@@ -154,7 +158,7 @@ class TestCalibration_Init(unittest.TestCase):
 
         image_width = intrinsic['image_width']
         image_height = intrinsic['image_height']
-        for idx_image, pt_image in enumerate(list_pt_image):
+        for idx_image, pt_image in enumerate(pt_images):
             plt.figure('image {}'.format(idx_image))
             plt.plot([0, image_width], [0, 0])
             plt.plot([0, image_width], [image_height, image_height])
@@ -163,11 +167,12 @@ class TestCalibration_Init(unittest.TestCase):
 
             plt.scatter(pt_image[:,0], pt_image[:,1])
             plt.gca().invert_yaxis()
-            plt.axis('equal')
+            plt.axis('equal')        
         plt.show()
 
 if __name__ == '__main__':
     
     unittest.main()
     
+
 

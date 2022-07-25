@@ -1,6 +1,7 @@
 """
 @fn     camera_geometry.py
 @brief  CameraGeometry class.
+        repository: https://github.com/trip2eee/camera_calibration
 @author Jongmin Park
 @date   February 02, 2022
 """
@@ -18,14 +19,14 @@ class CameraGeometry:
         self.image_width = intrinsic['image_width']
         self.image_height = intrinsic['image_height']
         self.fu = intrinsic['fu']
-        self.fv = intrinsic['fv']        
+        self.fv = intrinsic['fv']
         self.cu = intrinsic['cu']
         self.cv = intrinsic['cv']
         self.dist = intrinsic['dist']  # distortion parameters
 
         self.roll = params['roll']
         self.pitch = params['pitch']
-        self.yaw = params['yaw']        
+        self.yaw = params['yaw']
         self.tx = params['tx']
         self.ty = params['ty']
         self.tz = params['tz']
@@ -70,9 +71,13 @@ class CameraGeometry:
                       [0,  0,  1,]])
         
         R  = np.matmul(Rz, np.matmul(Ry, Rx))
+
+        self.R = R
+        self.T = T
+        
         RT = np.matmul(R, T)
         H  = np.matmul(K, RT)
-
+        
         self.H = H
         self.H3x3 = np.array([[H[0,0], H[0,1], H[0,3]],
                               [H[1,0], H[1,1], H[1,3]],
@@ -117,3 +122,4 @@ class CameraGeometry:
         v = self.fv * np.multiply(ratios, v0) + self.cv
 
         return u, v
+
