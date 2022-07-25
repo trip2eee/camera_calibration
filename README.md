@@ -226,21 +226,21 @@ $$e_v = v_d - v_{target}$$
 
 
 ### 3. Optimization
-$$ f(x) = \begin{bmatrix}e_{u,i,j}\\\\e_{v,i,j}\end{bmatrix}$$
+$$f(x) = \begin{bmatrix}e_{u,i,j}\\\\e_{v,i,j}\end{bmatrix}$$
 $$e(p) = \sum_{i,j}{\lVert f(x) \rVert}^2 $$
 Summation of errors over image $i$ and point $j$.
 
 $$f(p) = f(p + \Delta p) \approx f(p) + \frac{\partial f}{\partial p}\Delta p$$
 
-$$e = \sum_{i,j}{\left\lVert f(p) + \frac{\partial f}{\partial p}\Delta p \right\rVert}^2 $$
+$$e = \sum_{i,j}{\left\lVert f(p) + \frac{\partial f}{\partial p}\Delta p \right\rVert}^2$$
 
-$$ \frac{\partial e}{\partial \Delta p} = 2\sum{J^T\left(f(p) + J\Delta p\right)} = 0$$
+$$\frac{\partial e}{\partial \Delta p} = 2\sum{J^T\left(f(p) + J\Delta p\right)} = 0$$
 where $J = \frac{\partial f}{\partial p}$
 
 
 Repeat the following computation until the parameter converges. This implementation uses Levenberg-Marquardt method for better convergence.
-$$ \Delta p = \left[J^T J\right]^{-1} J^T f(p)$$
-$$ p \leftarrow p + \Delta p$$
+$$\Delta p = \left[J^T J\right]^{-1} J^T f(p)$$
+$$p \leftarrow p + \Delta p$$
 
 This process is implemented in refine_parameters() in [calibrate_camera.py](calibrate_camera.py) and validated in [test_calibration_optimization.py](test_calibration_optimization.py). All the estimated parameters satisfy accuracy of 1e-6. Reprojection error and its derivatives are derived by sympy. Then the resulting code are optimized by grouping common terms. For detailed computation process, please refer to [doc/optimization.ipynb](doc/optimization.ipynb)
 
