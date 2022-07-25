@@ -1,24 +1,43 @@
 # Camera Calibration
 Camera calibration based on Zhang's method.
 
-calibrate() method of CalibrateCamera class receives world coordinates of corner points and their corresponding image points from at least 3 images taken at different angles and positions. Then the method computes intrinsic parameters, distortion and extrinsic parameters.
+![images/cameras.png](images/cameras.png)
+
+## Usage
+calibrate() method of CalibrateCamera receives world coordinates of corner points and their corresponding image points from at least 3 images taken at different angles and positions. Then the method computes intrinsic parameters, distortion and extrinsic parameters.
 
 ```python
 calib = CalibrateCamera()
-calib.calibrate(pt_world, pt_images)        
-calib.print_parameters()
+intrinsic, extrinsics = calib.calibrate(pt_world, pt_images)        
 
 # Process the results
-# calib.intrinsic : dictionary of intrinsic parameters
-# calib.extrinsics : list of dictionary of extrinsic parameters
+# intrinsic (or calib.intrinsic) : dictionary of intrinsic parameters
+# extrinsics (or calib.extrinsics) : list of dictionaries of extrinsic parameters
 
-# Visualize
 vis = Visualizer()
 vis.visualize_cameras(calib.extrinsics)
 ```
 
-<img src='images/cameras.png' width='50%' height='50%'>
+Intrinsic parameters
 
+| key | description |
+|-|-|
+|fu| focal length in u-axis|
+|fv| focal length in v-axis|
+|cu| the u-coordinate of the principal point |
+|cv| the v-coordinate of the principal point |
+|dist| radial distortion parameters $\kappa_1$, $\kappa_2$, $\kappa_3$ |
+
+Extrinsic parameters
+| key | description |
+|-|-|
+|roll | rotation around x-axis, unit:radian|
+|pitch | rotation around y-axis, unit:radian|
+|yaw | rotation around z-axis, unit:radian|
+|tx| translation in x-axis, unit:m|
+|ty| translation in y-axis, unit:m|
+|tz| translation in z-axis, unit:m|
+* Rotation is represented by Euler angle while OpenCV represents the rotation in axis angle.
 
 ## Axis
 ### Image coordinate
@@ -106,7 +125,7 @@ The computation of homography matrices is implemented in compute_homography() in
 
 $$\begin{bmatrix}w\cdot u\\\\w\cdot v\\\\w\end{bmatrix} = H\begin{bmatrix}x \\\\ y \\\\ 1\end{bmatrix}$$
 
-where $H = \lambda K\begin{bmatrix}r_1 & r_2 & t\end{bmatrix}$, $r_1$ and $r_2$ are the 1st and the 2nd column vectors of the rotation matrix $R$ and $t$ is translation vector. $\lambda$ is an arbitrary scalar.
+where $H = \lambda K\begin{bmatrix}r_1 & r_2 & rt\end{bmatrix}$, $r_1$ and $r_2$ are the 1st and the 2nd column vectors of the rotation matrix $R$; $rt$ is translation vector $t$ rotated by $R$. $\lambda$ is an arbitrary scalar.
 
 
 Let's denote $H = \begin{bmatrix}h_1 & h_2 & h_3\end{bmatrix}$. Then $K$, $r_1$ and $r_2$ can be decomposed by exploiting orthogonality of $R$.
@@ -119,9 +138,9 @@ $r_1 = \frac{1}{\lambda} K^{-1}h_1$
 
 $r_2 = \frac{1}{\lambda} K^{-1}h_2$
 
-$r_1^T r_2 = h_1^TK^{-T}K^{-1}h_2 = 0$
+$r_1^T r_2 = \frac{1}{\lambda^2}h_1^TK^{-T}K^{-1}h_2 = 0$
 
-$r_1^T r_1 = r_2^T r_2 = h_1^TK^{-T}K^{-1}h_1 = h_2^TK^{-T}K^{-1}h_2$
+$r_1^T r_1 = r_2^T r_2 = \frac{1}{\lambda^2}h_1^TK^{-T}K^{-1}h_1 = \frac{1}{\lambda^2}h_2^TK^{-T}K^{-1}h_2$
 
 The above equations can be rewritten as
 
@@ -129,7 +148,8 @@ $h_1^TBh_2 = 0$
 
 $h_1^TBh_1 - h_2^TBh_2 = 0$
 
-$$ B = K^{-T} K^{-1} = \begin{bmatrix}\frac{1}{f_{u}^{2}} & 0 & - \frac{cu}{f_{u}^{2}}\\\\0 & \frac{1}{f_{v}^{2}} & - \frac{cv}{f_{v}^{2}}\\\\- \frac{cu}{f_{u}^{2}} & - \frac{cv}{f_{v}^{2}} & \frac{cu^{2}}{f_{u}^{2}} + \frac{cv^{2}}{f_{v}^{2}} + 1\end{bmatrix} = \begin{bmatrix}b_{11} & 0 & b_{13} \\\\ 0 & b_{22} & b_{23} \\\\ b_{13} & b_{23} & b_{33} \end{bmatrix}$$
+
+$$ B = \frac{1}{\lambda^2}K^{-T} K^{-1} = \begin{bmatrix}\frac{1}{\lambda^2}\frac{1}{f_{u}^{2}} & 0 & - \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}}\\\\0 & \frac{1}{\lambda^2}\frac{1}{f_{v}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}}\\\\- \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}} & \frac{1}{\lambda^2}\left(\frac{cu^{2}}{f_{u}^{2}} + \frac{cv^{2}}{f_{v}^{2}} + 1\right)\end{bmatrix} = \begin{bmatrix}b_{11} & 0 & b_{13} \\\\ 0 & b_{22} & b_{23} \\\\ b_{13} & b_{23} & b_{33} \end{bmatrix}$$
 
 Then the elements of $B$ matrix can be computed by the following homogeneous equation.
 $$Vb = 0$$
@@ -140,7 +160,6 @@ $$b = \begin{bmatrix}b_{11} & b_{13} & b_{22} & b_{23} & b_{33}\end{bmatrix}^T$$
 
 Since $B$ matrix has an arbitrary scale factor $B=\frac{1}{\lambda^2} K^{-T}K^{-1}$, the parameters are computed as follows.
 
-$$ B = K^{-T} K^{-1} = \begin{bmatrix}\frac{1}{\lambda^2}\frac{1}{f_{u}^{2}} & 0 & - \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}}\\\\0 & \frac{1}{\lambda^2}\frac{1}{f_{v}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}}\\\\- \frac{1}{\lambda^2}\frac{cu}{f_{u}^{2}} & - \frac{1}{\lambda^2}\frac{cv}{f_{v}^{2}} & \frac{1}{\lambda^2}\left(\frac{cu^{2}}{f_{u}^{2}} + \frac{cv^{2}}{f_{v}^{2}} + 1\right)\end{bmatrix} = \begin{bmatrix}b_{11} & 0 & b_{13} \\\\ 0 & b_{22} & b_{23} \\\\ b_{13} & b_{23} & b_{33} \end{bmatrix}$$
 
 $cu = -b_{13}/b_{11}$
 
@@ -152,7 +171,7 @@ $f_u = \sqrt{b_{11} / s}$
 
 $f_v = \sqrt{b_{22} / s}$
 
-Now we can decompose extrinsic camera parameters
+Now we can decompose extrinsic camera parameters. Though an arbitrary scale factor of $K$ is removed, an arbitrary scale in $r_1$, $r_2$ and $rt$ still remains.
 
 $$H = \lambda K\cdot RT$$
 $$K^{-1}H = \begin{bmatrix} K^{-1} h_1 & K^{-1} h_2 & K^{-1} h_3 \end{bmatrix} = \lambda RT = \begin{bmatrix} \lambda r_1 & \lambda r_2 & \lambda rt \end{bmatrix}$$
@@ -164,19 +183,19 @@ Since rotation matrix $R$ is orthogonal, the 3rd column of $R$ can be comptued a
 
 $$r_3=r_1 \times r_2$$
 
-The 3rd column of $K^{-1}H$ is $\lambda Rt$ Translation vector $t$ can be decompused as follows since the transpose of orthogonal matrix is equivalent to its inverse.
+The 3rd column of $K^{-1}H$ is $\lambda Rt$ Translation vector $t$ can be decomposed as follows since the transpose of orthogonal matrix is equivalent to its inverse.
 
 $$t = R^Trt = \begin{bmatrix}t_x & t_y & t_z\end{bmatrix}^T$$
 
-### Rotation angle estimation
+### Estimation of rotation angles
 
 $$ R_q = R_zR_yR_x = \begin{bmatrix}\cos{\psi} \cos{\theta} & \sin{\phi} \sin{\theta} \cos{\psi} - \sin{\psi} \cos{\phi} & \sin{\phi} \sin{\psi} + \sin{\theta} \cos{\phi} \cos{\psi}\\\\ \sin{\psi} \cos{\theta} & \sin{\phi} \sin{\psi} \sin{\theta} + \cos{\phi} \cos{\psi} & - \sin{\phi} \cos{\psi} + \sin{\psi} \sin{\theta} \cos{\phi}\\\\- \sin{\theta} & \sin{\phi} \cos{\theta} & \cos{\phi} \cos{\theta}\end{bmatrix} $$
 
-$$\phi = atan\left(\frac{r_{3,2}}{r_{3,3}}\right)$$
+$$\phi = atan\left(\frac{r_{32}}{r_{33}}\right)$$
 
-$$ \theta = -asin(r_{3,1}) $$
+$$ \theta = -asin(r_{31}) $$
 
-$$ \psi = atan\left(\frac{r_{2,1}}{r_{1,1}}\right) $$
+$$ \psi = atan\left(\frac{r_{21}}{r_{11}}\right) $$
 
 
 Please note that $R$ may not satisfies the properties of a rotation matrix (e.g. orthogonality) due to noise. However it can be good initial values for non-linear optimization.
@@ -241,13 +260,14 @@ $$\frac{\partial e}{\partial \Delta p} = 2\sum{J^T\left(f(p) + J\Delta p\right)}
 where $J = \frac{\partial f}{\partial p}$
 
 
-Repeat the following computation until the parameter converges. This implementation uses Levenberg-Marquardt method for better convergence.
-$$\Delta p = \left[J^T J\right]^{-1} J^T f(p)$$
-$$p \leftarrow p + \Delta p$$
+Repeat the following process until the parameter is converged. This implementation uses Levenberg-Marquardt method.
+$$J_k = \left. \frac{\partial f(p)}{\partial p} \right \rvert_{p_k}$$
+$$\Delta p_k = \left[J_k^T J_k\right]^{-1} J_k^T f(p_k)$$
+$$p_{k+1} \leftarrow p_k + \Delta p_k$$
 
-This process is implemented in refine_parameters() in [calibrate_camera.py](calibrate_camera.py) and validated in [test_calibration_optimization.py](test_calibration_optimization.py). All the estimated parameters satisfy accuracy of 1e-6. Reprojection error and its derivatives are derived by sympy. Then the resulting code are optimized by grouping common terms. For detailed computation process, please refer to [doc/optimization.ipynb](doc/optimization.ipynb)
+This process is implemented in refine_parameters() in [calibrate_camera.py](calibrate_camera.py) and validated in [test_calibration_optimization.py](test_calibration_optimization.py). All the estimated parameters satisfy accuracy of 1e-6. Reprojection error and its Jacobian is derived by sympy. Then the resulted code is optimized by grouping common terms. For detailed computation process, please refer to [doc/optimization.ipynb](doc/optimization.ipynb)
 
-In the refinement of rotation matrix, quaternion is used instead of Euler angle to make derivatives simple. For explanation of quaternion, please refer to [https://github.com/trip2eee/quatlib](https://github.com/trip2eee/quatlib).
+In the refinement of rotation matrix, quaternion is used to avoid gimbal lock and make Jacobian more simple compared with Euler angle. For explanation of quaternion, please refer to [https://github.com/trip2eee/quatlib](https://github.com/trip2eee/quatlib).
 
 
 # Reference

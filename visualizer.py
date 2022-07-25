@@ -109,18 +109,18 @@ class Visualizer:
         s = 0.25
         x1, y1 = -s, -s
         x2, y2 = s, s
-        z = -s
+        z = s*2
 
         # left top
-        p_lt = np.array([[x1], [y1], [0]])
+        p_lt = np.array([[x1], [y1], [z]])
         # right top
-        p_rt = np.array([[x2], [y1], [0]])
+        p_rt = np.array([[x2], [y1], [z]])
         # left bottom
-        p_lb = np.array([[x1], [y2], [0]])
+        p_lb = np.array([[x1], [y2], [z]])
         # right bottom
-        p_rb = np.array([[x2], [y2], [0]])
+        p_rb = np.array([[x2], [y2], [z]])
         # center
-        p_ct = np.array([[0], [0], [z]])
+        p_ct = np.array([[0], [0], [0]])
 
         p_lt = np.matmul(R.T, p_lt) - T
         p_rt = np.matmul(R.T, p_rt) - T
@@ -134,7 +134,7 @@ class Visualizer:
                 [p_lt[1,0], p_rt[1,0], p_rb[1,0], p_lb[1,0], p_lt[1,0], p_ct[1,0], p_rt[1,0], p_rb[1,0], p_ct[1,0], p_lb[1,0]],
                 [p_lt[2,0], p_rt[2,0], p_rb[2,0], p_lb[2,0], p_lt[2,0], p_ct[2,0], p_rt[2,0], p_rb[2,0], p_ct[2,0], p_lb[2,0]], c=c, label=label)
 
-        ax.text(p_ct[0,0], p_ct[1,0], p_ct[2,0] - 0.5, label, color=c)
+        ax.text(p_ct[0,0], p_ct[1,0], p_ct[2,0] - 0.1, label, color=c)
 
     def visualize_cameras(self, extrinsics):
         """This method visualizes camera(positions and angles) in the world coordinate.
