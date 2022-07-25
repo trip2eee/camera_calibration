@@ -22,11 +22,11 @@ vis.visualize_cameras(calib.extrinsics)
 
 ## Axis
 ### Image coordinate
-* $u$: Lateral axis. Leftward direction is positive.
+* $u$: Lateral axis. Rightward direction is positive.
 * $v$: Vertical axis. Downward direction is positive.
 
 ### World coordinate
-* $x$: Lateral axis. Leftward direction is positive
+* $x$: Lateral axis. Rightward direction is positive.
 * $y$: Vertical axis. Downward direction is positive.
 * $z$: Longitudinal axis. Forward direction is positive.
 
@@ -213,15 +213,18 @@ $$r^2 = u_n^2 + v_n^2$$
 $$ratio = 1 + \kappa_1 r^2 + \kappa_2 r^4 + \kappa_3 r^6$$
 
 where 
-$$u_n = \frac{u - cu}{f_u} = x_c/z_c$$
-$$v_n = \frac{v - cv}{f_v} = x_c/z_c$$
+$$u_n = \frac{u - cu}{f_u} = \frac{x_c}{z_c}$$
+
+$$v_n = \frac{v - cv}{f_v} = \frac{y_c}{z_c}$$
 
 Then the reprojection error is as follows
 
 $$u_d = f_u \cdot ratio \cdot u_n + cu$$
+
 $$v_d = f_v \cdot ratio \cdot v_n + cv$$
 
 $$e_u = u_d - u_{target}$$
+
 $$e_v = v_d - v_{target}$$
 
 
