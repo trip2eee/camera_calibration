@@ -213,8 +213,8 @@ $$r^2 = u_n^2 + v_n^2$$
 $$ratio = 1 + \kappa_1 r^2 + \kappa_2 r^4 + \kappa_3 r^6$$
 
 where 
-$$ u_n = \frac{u - cu}{f_u} = x_c/z_c $$
-$$ v_n = \frac{v - cv}{f_v} = x_c/z_c $$
+$$u_n = \frac{u - cu}{f_u} = x_c/z_c$$
+$$v_n = \frac{v - cv}{f_v} = x_c/z_c$$
 
 Then the reprojection error is as follows
 
