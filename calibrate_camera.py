@@ -11,6 +11,10 @@ from quaternion import Quaternion
 import time
 from typing import List
 
+MAX_ITERATIONS = 100                # maximum number of interation in refinement.
+STOP_CONDITION_DELTA_PARAM = 1e-10  # minimum norm of delta param in refinement.
+STOP_CONDITION_DAMPING = 1e5        # maximum damping factor in refinement (mu).
+
 class CalibrateCamera:
     def __init__(self):        
         # intrinsic camera parameters        
@@ -28,7 +32,7 @@ class CalibrateCamera:
         self.extrinsics = []    # list of extrinsic camera parameters for input images.
         self.num_iterations = 20
 
-    def calibrate(self, pt_world:np.ndarray, pt_images:List[np.ndarray], num_iterations=20):
+    def calibrate(self, pt_world:np.ndarray, pt_images:List[np.ndarray], num_iterations=MAX_ITERATIONS):
         """This method is the main entry fuction.
            pt_world - World coordinates of corner points
            pt_images - List of image coordinates of corner points
@@ -312,8 +316,16 @@ class CalibrateCamera:
             else:
                 mu *= 10
 
-            print('iteration: {}, mean squared projection error: {}'.format(iter, opt_ms_error))
-        
+            print('iteration: {}, mean-squared projection error: {}'.format(iter, opt_ms_error))
+            
+            if mu >= STOP_CONDITION_DAMPING:
+                break
+
+            norm_delta_param = np.sqrt(np.mean(delta_param**2))
+            if norm_delta_param < STOP_CONDITION_DELTA_PARAM:
+                break
+
+
         # update parameters
         self.intrinsic['fu']      = param[0,0]
         self.intrinsic['fv']      = param[1,0]
